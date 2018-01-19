@@ -1,0 +1,188 @@
+---
+title: "Storms and other severe weather events' impact on public health and Economy in US"
+date: "Jan 19, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=12,fig.height=5)
+```
+
+## synopsis
+
+Based on the [raw data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) from U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database, this paper explores the effects of severe natural events from 1950 to November 2011, more specifically the most harmful events with regard to human healths and economic damages. The data was read and preprocessed then aggregated by event types. Harmful events to humans are measured by the number of fatalities and injuries while detrimental events to economics are measured by the number of property and crop damages. Based on analysis result, tornado causing highest fatality and injury while flood damages most property and drought damages most crop.
+
+
+Following questions will be addressed in this analysis.
+
+1. Across the United States, which types of events (as indicated in the **EVTYPE** variable) are most harmful with respect to population health?
+
+2. Across the United States, which types of events have the greatest economic consequences?
+
+## Loading Required Libraries
+```{r, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+## Data Processing
+
+# Load raw data
+```{r load, cache=TRUE}
+dataURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+dataFile <- "./repdata%2Fdata%2FStormData.csv.bz2"
+if(!file.exists(dataFile)){
+        download.file(dataURL,dataFile)
+}
+
+rawData  <- read.csv("repdata%2Fdata%2FStormData.csv.bz2")
+```
+
+Among all these variables, we will analysis following 8 variables that are related to this analysis, which are:
+
+* STATE
+* EVTYPE
+* FATALITIES
+* INJURIES
+* PROPDMG
+* PROPDMGEXP
+* CROPDMG
+* CROPDMGEXP
+
+```{r filterVariables, cache=TRUE}
+variName<- c("STATE", "EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP","CROPDMG", "CROPDMGEXP")
+data <-rawData[variName]
+dim(data)
+head(data)
+```
+
+#check missing values in data
+```{r checkNA, cache=TRUE}
+nas <- sum(is.na(data))
+```
+
+There are `r nas` data records having **NA**.
+
+# Aggregate the data and sort in descreasing order to calculate the type of events whhich caused large number of fatalities and injuries.
+```{r cache=TRUE}
+fatalities <- data %>%
+        filter(EVTYPE!="?") %>%
+        filter(!is.na(FATALITIES)) %>%
+        group_by(EVTYPE)%>%
+        summarize(fatal = sum(FATALITIES)) %>%
+        arrange(desc(fatal)) %>%
+        print
+
+injuries <- data %>%
+        filter(EVTYPE!="?") %>%
+        filter(!is.na(INJURIES)) %>%
+        group_by(EVTYPE)%>%
+        summarize(injury = sum(INJURIES)) %>%
+        arrange(desc(injury)) %>%
+        print
+```
+
+
+First look at unqiue values of crop and propert damages exponent values.
+
+```{r cache=TRUE}
+unique(data$CROPDMGEXP)
+unique(data$PROPDMGEXP)
+```
+
+Exponent value for property and crop damage are both numerical and alphabetical charatcer. For example, "8" would be 10^8 and "K" or "k" would be thousands.First format number to make it consistent.
+
+
+```{r cache=TRUE}
+symbol <- c("","+","-","?",0:9,"h","H","k","K","m","M","b","B")
+factor <- c(rep(0,4),0:9,2,2,3,3,6,6,9,9)
+multipler <-data.frame(symbol,factor)
+```
+
+# Aggregate the data and sort in descreasing order to calculate the type of events whhich caused large number of property and crop damage.
+
+```{r cache=TRUE}
+data$PROPDMGVAL <- data$PROPDMG * 10^multipler[match(data$PROPDMGEXP,multipler$symbol),2]
+data$CROPDMGVAL <- data$CROPDMG * 10^multipler[match(data$CROPDMGEXP,multipler$symbol),2]
+
+propertydamages <- data %>%
+        filter(EVTYPE!="?") %>%
+        filter(!is.na(PROPDMGVAL)) %>%
+        group_by(EVTYPE)%>%
+        summarize(amount = sum(PROPDMGVAL)) %>%
+        arrange(desc(amount)) %>%
+        print
+
+cropdamages <- data %>%
+        filter(EVTYPE!="?") %>%
+        filter(!is.na(CROPDMGVAL)) %>%
+        group_by(EVTYPE)%>%
+        summarize(amount = sum(CROPDMGVAL)) %>%
+        arrange(desc(amount)) %>%
+        print
+```
+
+## Results
+
+#Harmful events to human healths: fatalities & injuries
+
+Draw the bar plot with top 10 event types which cause most fatality and injuries.
+
+```{r cache=TRUE}
+fatalities$EVTYPE <- factor(fatalities$EVTYPE, levels = fatalities$EVTYPE[order(-fatalities$fatal)])
+injuries$EVTYPE <- factor(injuries$EVTYPE, levels = injuries$EVTYPE[order(-injuries$injury)])
+
+f <- ggplot(fatalities[1:10,], aes(x=EVTYPE, y=fatal))+
+        geom_bar(stat= "identity",aes(fill=EVTYPE)) +
+        xlab("Event Types") + 
+        ylab("Fatality") +
+        theme(plot.title = element_text(hjust = 0.5))+
+        scale_fill_discrete(name = "Event Type") + 
+        ggtitle("Top 10 events causing highest fatality")
+print(f)
+
+i <- ggplot(injuries[1:10,], aes(x=EVTYPE, y=injury))+
+        geom_bar(stat= "identity",aes(fill=EVTYPE)) +
+        xlab("Event Types") + 
+        ylab("Injury") +
+        theme(plot.title = element_text(hjust = 0.5))+
+        scale_fill_discrete(name = "Event Type") + 
+        ggtitle("Top 10 events causing highest injury")
+print(i)
+
+```
+
+The plot showed that Tornado causing both highest number of fatalities and injuries.
+
+#Harmful events to economics : property & crop damages
+
+Draw the plot with top 10 event types which cause most property & crop damages damages.
+
+```{r cache=TRUE}
+propertydamages$EVTYPE <- factor(propertydamages$EVTYPE, levels = propertydamages$EVTYPE[order(-propertydamages$amount)])
+cropdamages$EVTYPE <- factor(cropdamages$EVTYPE, levels = cropdamages$EVTYPE[order(-cropdamages$amount)])
+
+p <- ggplot(propertydamages[1:10,], aes(x=EVTYPE, y=amount))+
+        geom_bar(stat= "identity",aes(fill=EVTYPE)) +
+        xlab("Event Types") + 
+        ylab("Property Damages Amount") +
+        theme(plot.title = element_text(hjust = 0.5))+
+        scale_fill_discrete(name = "Event Type") + 
+        ggtitle("Top 10 events causing highest property damage")
+print(p)
+
+c <- ggplot(cropdamages[1:10,], aes(x=EVTYPE, y=amount))+
+        geom_bar(stat= "identity",aes(fill=EVTYPE)) +
+        xlab("Event Types") + 
+        ylab("Crop Damages Amount") +
+        theme(plot.title = element_text(hjust = 0.5))+
+        scale_fill_discrete(name = "Event Type") + 
+        ggtitle("Top 10 events causing highest crop damages")
+print(c)
+
+```
+
+The plot showed that Flood & Hurricane causing highest property damages and Drought & Other Flood Types hit crop hardest.
+
+
